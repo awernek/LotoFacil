@@ -9,7 +9,7 @@ Aplicação Blazor Server (.NET 10) que gera jogos da Lotofácil aplicando filtr
 ## Solution
 
 ```
-LotoFacil.sln
+LotoFacil.slnx
 ├── src/LotoFacil.Domain         (classlib, sem dependências externas)
 ├── src/LotoFacil.Application    (classlib, referencia Domain)
 ├── src/LotoFacil.Infrastructure (classlib, referencia Domain)
@@ -27,7 +27,7 @@ LotoFacil.sln
 - Idioma: **C#** para tipos e membros; **português** para textos de UI e labels
 - Models usam `record` (imutáveis) exceto `ConfiguracaoFiltros` e `FiltroFaixas` que são `class` (mutáveis pela UI)
 - Filtros seguem **Strategy Pattern**: todos implementam `IFiltro` com `Nome`, `Ativo` e `Validar(Jogo)`
-- DI: `ConfiguracaoFiltros` é **Scoped** (por sessão Blazor); `ICaixaApiClient` via `AddHttpClient`
+- DI: `ConfiguracaoFiltros` é **Scoped** via `ConfiguracaoStorage` (config lida/gravada no localStorage); `ICaixaApiClient` via `AddHttpClient`
 - `HistoricoStore` é **estático** (compartilhado entre sessões, thread-safe com `Lock`)
 - Render mode: `<Routes @rendermode="InteractiveServer">` em `App.razor` — NÃO há `@rendermode` nas páginas individuais nem no layout
 
@@ -77,14 +77,14 @@ Resulta em faixa `[0.93, 1.07]` — razão máx/mín ≈ 1.15×. Com 15 sorteios
 
 ### Modo Ranqueado
 
+Pipeline em 5 etapas (GeradorDeJogos.GerarRanqueado):
+
 ```csharp
-// GeradorDeJogos.GerarRanqueado(quantidade, tamanhoPool=5000)
-candidatos = gerar 5.000 jogos válidos com score calculado
-ordenar por GameScorer.CalcularScore() desc
-selecionados = [escolher aleatório entre top-5]
-enquanto selecionados.Count < quantidade:
-    próximo = candidato restante com maior diversidade mínima
-               (diversidade = números diferentes em relação a todos os já selecionados)
+// 1. Candidatos: GerarCandidatos(tamanhoPool) — jogos que passam nos filtros
+// 2. Score: CalcularScoreCompleto(jogo) → GameScorer.CalcularScore (freq, padrões, correlação)
+// 3. Ranking: ordenar por score desc
+// 4. Diversidade: SelecionarComDiversidade — 1º entre top-5; depois maximiza Jaccard mínimo
+// 5. Otimização: se ≥ 4 jogos, GeneticGameOptimizer.Otimizar() e nova SelecionarComDiversidade
 ```
 
 ## Filtros padrão
@@ -111,7 +111,7 @@ enquanto selecionados.Count < quantidade:
 ### Domain
 
 - `Jogo` — record com `Numeros` (IReadOnlyList<int>), props computadas `Soma`, `Pares`, `Impares`, `Chave`
-- `ConfiguracaoFiltros` — classe mutável com propriedade por filtro + `ModoInteligente` (bool) + `ModoRanqueado` (bool). Filtros de range usam `FiltroRange` (record: Nome, Ativo, Min, Max, LimiteMin, LimiteMax)
+- `ConfiguracaoFiltros` — classe mutável com propriedade por filtro + `ModoInteligente`, `ModoRanqueado`, `TamanhoPoolRanqueado`. Filtros de range usam `FiltroRange` (record); Histórico usa `FiltroSimples` (record: Nome, Ativo); Faixas usa `FiltroFaixas` (class com MinPorFaixa, MaxPorFaixa)
 - `ResultadoHistorico` — record (Concurso, Data, Numeros)
 - `IFiltro` — `string Nome`, `bool Ativo`, `bool Validar(Jogo jogo)`
 - `ICaixaApiClient` — `ObterResultadosAsync(int quantidade)`, `ObterUltimoResultadoAsync()`
@@ -120,13 +120,21 @@ enquanto selecionados.Count < quantidade:
 
 **Filtros** — todos recebem `ConfiguracaoFiltros` via construtor e leem limiares dele.
 
+**Scoring:** `IScoreComponent` (Nome, Peso, Calcular(Jogo, ScoreContext)); `ScoreContext` (Stats, UltimoResultado, PatternStats, CorrelationMatrix). `ScoreComponents.cs`: ParityPenalty, SumPenalty, RangeDistributionPenalty, HighNumbersPenalty, SequencePenalty, FrequencyScore, LastDrawDistance, PatternAdherence, PairCorrelationScore.
+
 **Services:**
-- `FiltroService` — mantém `List<IFiltro>`, método `Validar(Jogo)` aplica todos os ativos
-- `GeradorDeJogos` — rejection sampling com `SortearPonderado` ou uniforme; `DefinirPesosInteligentes(Dictionary<int,double>)` habilita modo inteligente
-- `HistoricoStore` — cache estático thread-safe; `Atualizar(IReadOnlyList<ResultadoHistorico>)` e `Resultados` (ordenado desc por concurso)
+- `FiltroService` — mantém `List<IFiltro>` via `Registrar(IFiltro)`; `Validar(Jogo)` aplica todos os ativos
+- `GeradorDeJogos` — rejection sampling com `SortearPonderado` ou uniforme; `DefinirPesosInteligentes`, `DefinirContextoHistorico(stats, ultimoResultado)`, `DefinirContextoEstatistico(patternStats, correlationMatrix, lastDrawProfile)`; `CombinarPesos()` mistura pesos inteligentes com bias do LastDrawAnalyzer; `GerarRanqueado` usa GameScorer + diversidade Jaccard + GeneticGameOptimizer; `ResultadoGeracao` inclui ScoreMedio, DiversidadeMedia, Duplicatas
+- `GameScorer` — estático; `CalcularScore(jogo, stats, ultimoResultado, patternStats, correlationMatrix)`, `Decompor()` por componente, `Jaccard(a,b)`, `Overlap`, `Diversidade`
+- `GeneticGameOptimizer` — recebe `Func<Jogo, double>`; `Otimizar(populacaoInicial, geracoes, tamanhoPopulacao)`
+- `PatternStatisticsService` — `Analisar(historico)` → `PatternStatistics`; `ScoreAderencia(jogo, stats, ultimoSorteio)`
+- `NumberCorrelationService` — `Construir(historico)` → `CorrelationMatrix`; matriz usa `ScoreCorrelacao(jogo)`
+- `LastDrawAnalyzer` — `Analisar(historico)` → `LastDrawProfile`; `GerarPesosBias(ultimoResultado, profile)` para CombinarPesos
+- `HistoricoStore` — cache estático thread-safe; `Atualizar(IReadOnlyList<ResultadoHistorico>)`, `Resultados`, `Quantidade`
 - `HistoricoSeeder` — `Parsear(IEnumerable<string>)` para formato `"NNNN - 01 02 ... 25"`
-- `EstatisticasService` — `Analisar()` retorna `EstatisticasResultado` (frequência, delay, quentes/frios, médias, distribuições); `ObterPesosInteligentes()` retorna pesos [0.93, 1.07]
+- `EstatisticasService` — `Analisar()` → `EstatisticasResultado`; `ObterPesosInteligentes(stats)` → pesos [0.93, 1.07]
 - `MonteCarloService` — simula N jogos, conta aprovados e distribui acertos (11-15 pontos)
+- `BacktestService`, `CoverageSimulatorService` — backtest e simulação de cobertura
 
 ### Infrastructure
 
@@ -136,7 +144,7 @@ enquanto selecionados.Count < quantidade:
 
 - `App.razor` — `<Routes @rendermode="InteractiveServer">` define o modo interativo para toda a árvore
 - `MainLayout.razor` — providers do MudBlazor (`MudPopoverProvider`, `MudSnackbarProvider`, etc.) ficam acessíveis porque estão no mesmo circuito interativo do Routes
-- `Home.razor` — gerador principal; chama `ObterPesosInteligentes` + `DefinirPesosInteligentes` quando ModoInteligente ativo; todo o `GerarJogos()` envolto em try/catch/finally
+- `Home.razor` — gerador principal; quando ModoInteligente e histórico disponível: EstatisticasService (pesos + DefinirContextoHistorico), PatternStatisticsService, NumberCorrelationService, LastDrawAnalyzer e DefinirContextoEstatistico; CriarFiltroService() com 9 filtros; Gerar ou GerarRanqueado conforme Config; try/catch/finally em GerarJogos()
 - `Configuracao.razor` — persiste via `ConfiguracaoStorage` (localStorage)
 - `Historico.razor` — importa da Caixa, exibe tabela com ErrorBoundary em volta do DataGrid
 - `Dashboard.razor` — heatmaps de frequência e delay, Monte Carlo
@@ -145,24 +153,28 @@ enquanto selecionados.Count < quantidade:
 
 ```
 Home.GerarJogos()
-  → CriarFiltroService() com 8 filtros lendo Config (scoped)
+  → CriarFiltroService() com 9 filtros (Paridade, Soma, Faixas, Primos, Fibonacci, Sequencias, NumerosAltos, Historico, RepeticaoUltimo) lendo Config
   → new GeradorDeJogos(filtroService)
   → se ModoInteligente && histórico disponível:
-      → EstatisticasService.Analisar(HistoricoStore.Resultados)
-      → EstatisticasService.ObterPesosInteligentes(stats)  // [0.93, 1.07]
-      → GeradorDeJogos.DefinirPesosInteligentes(pesos)
+      → EstatisticasService.Analisar() → stats
+      → EstatisticasService.ObterPesosInteligentes(stats) → DefinirPesosInteligentes
+      → GeradorDeJogos.DefinirContextoHistorico(stats, resultados[0].Numeros)
+      → PatternStatisticsService.Analisar() → patternStats
+      → NumberCorrelationService.Construir() → correlationMatrix
+      → LastDrawAnalyzer.Analisar() → lastDrawProfile
+      → GeradorDeJogos.DefinirContextoEstatistico(patternStats, correlationMatrix, lastDrawProfile)
   → se ModoRanqueado:
-      → GeradorDeJogos.GerarRanqueado(quantidade, tamanhoPool)
+      → GeradorDeJogos.GerarRanqueado(quantidade, TamanhoPoolRanqueado)
   → senão:
       → GeradorDeJogos.Gerar(quantidade)
-  → retorna ResultadoGeracao (jogos, tentativas, descartados, taxa)
+  → retorna ResultadoGeracao (jogos, tentativas, descartados, scoreMedio, diversidadeMedia, duplicatas)
 ```
 
 ## Para adicionar um novo filtro
 
 1. Criar classe em `Application/Filtros/` implementando `IFiltro`
-2. Adicionar propriedade em `ConfiguracaoFiltros` (Domain) com default sensato
-3. Registrar no `CriarFiltroService()` de `Home.razor`
+2. Adicionar propriedade em `ConfiguracaoFiltros` (Domain) com default sensato — usar `FiltroRange` ou `FiltroSimples` conforme o caso
+3. Registrar no `CriarFiltroService()` de `Home.razor` (e em `Dashboard.razor` se usar filtros lá)
 4. Adicionar card de configuração em `Configuracao.razor`
 
 ## Comandos úteis

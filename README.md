@@ -36,19 +36,15 @@ para cada jogo até atingir quantidade:
 
 ### Modo Inteligente (ponderado por frequência histórica)
 
-Mesma lógica, mas o passo 1 usa **amostragem ponderada sem reposição**:
+Mesma lógica, mas o passo 1 usa **amostragem ponderada sem reposição**. Os pesos podem ser combinados com **bias do último concurso** (LastDrawAnalyzer) para suavizar repetição/variação:
 
 ```
-pesos calculados por EstatisticasService.ObterPesosInteligentes():
-  peso[n] = (freq[n] - minFreq) / range × 0.14 + 0.93
-  → faixa resultante: [0.93, 1.07]  (razão máx/mín ≈ 1.15×)
+pesos base: EstatisticasService.ObterPesosInteligentes()
+  peso[n] = (freq[n] - minFreq) / range × 0.14 + 0.93  → faixa [0.93, 1.07]
 
-algoritmo SortearPonderado(pesos, 15):
-  pool = cópia dos 25 pesos
-  para i in 1..15:
-    corte = random() × soma_dos_pesos_do_pool
-    percorre pool acumulando pesos até atingir corte → número escolhido
-    remove escolhido do pool
+opcional: CombinarPesos() multiplica pelos pesos do LastDrawAnalyzer (perfil do último sorteio)
+
+SortearPonderado(pesos, 15): pool de 25 pesos; a cada sorteio: corte = random × soma; acumula até corte; remove escolhido do pool
 ```
 
 O viés é **intencional e leve**: o número mais frequente historicamente tem ~64%
@@ -57,16 +53,16 @@ de chance de aparecer num jogo vs ~58% do menos frequente. Não prevê sorteios 
 
 ### Modo Ranqueado
 
-Gera um pool maior (padrão 5.000 candidatos válidos) e seleciona os N melhores
-por **score estatístico + diversidade máxima entre si**:
+Pipeline em 5 etapas: **candidatos → score → ranking → diversidade → otimização genética**:
 
 ```
-candidatos = gerar 5.000 jogos que passam todos os filtros
-ordenar por GameScorer.CalcularScore() (frequência histórica dos números)
-selecionar iterativamente:
-  1º: sorteio entre os top-5 do ranking
-  cada seguinte: maximiza diversidade mínima contra os já selecionados
-                 (diversidade = quantidade de números diferentes entre dois jogos)
+1. Candidatos: gerar pool (padrão 5.000) que passam todos os filtros
+2. Score: GameScorer.CalcularScore() com frequência, padrões, correlação e último concurso
+3. Ranking: ordenar por score decrescente
+4. Diversidade: selecionar iterativamente
+   — 1º: sorteio entre os top-5 do ranking
+   — cada seguinte: maximiza diversidade mínima (Jaccard) contra os já selecionados
+5. Otimização: se ≥ 4 jogos, GeneticGameOptimizer refina a população e nova seleção por diversidade
 ```
 
 > O modo ranqueado produz jogos estatisticamente parecidos com os históricos,
@@ -96,13 +92,25 @@ src/
       SequenciasFiltro.cs          # Pares consecutivos: 4–10 (desativado por padrão)
       HistoricoFiltro.cs           # Evita jogos já sorteados (ativo por padrão)
       RepeticaoUltimoFiltro.cs     # Repetição do último concurso: 5–11 (ativo por padrão)
+      NumerosAltosFiltro.cs        # Números 22–25: 0–3 (desativado por padrão)
+    Scoring/
+      IScoreComponent.cs           # Contexto + interface dos componentes de score
+      ScoreComponents.cs           # Parity, Sum, Range, Frequency, LastDraw, Pattern, Correlation
     Services/
-      GeradorDeJogos.cs            # Geração com rejeição + amostragem ponderada
+      GeradorDeJogos.cs            # Rejeição + ponderado + ranqueado (diversidade + genético)
       FiltroService.cs             # Cadeia de filtros ativos (Strategy)
       HistoricoStore.cs            # Cache estático dos resultados (thread-safe com Lock)
       HistoricoSeeder.cs           # Parser de Docs/últimosjogos.md para seed inicial
       EstatisticasService.cs       # Frequência, delay, pesos inteligentes
+      GameScorer.cs                # Score por componentes (freq, padrões, correlação, Jaccard)
+      GameDiversityService.cs      # Diversidade entre jogos
+      GeneticGameOptimizer.cs      # Otimização genética no modo ranqueado
+      PatternStatisticsService.cs  # Estatísticas de padrões (faixas, paridade, sequências)
+      NumberCorrelationService.cs  # Matriz de correlação entre números
+      LastDrawAnalyzer.cs          # Perfil do último concurso e bias para pesos
       MonteCarloService.cs         # Simulação Monte Carlo
+      BacktestService.cs           # Backtest de estratégias
+      CoverageSimulatorService.cs  # Simulador de cobertura
 
   LotoFacil.Infrastructure/
     CaixaApiClient.cs              # HttpClient para API da Caixa (batches de 5 req.)
@@ -144,6 +152,7 @@ src/
 - **Strategy Pattern** nos filtros: cada filtro implementa `IFiltro`, simples de estender
 - **Render mode unificado**: `<Routes @rendermode="InteractiveServer">` em `App.razor`
   garante que layout e providers do MudBlazor estão no mesmo circuito interativo
+- **Configuração**: `ConfiguracaoFiltros` é Scoped via `ConfiguracaoStorage` (localStorage no cliente)
 - **Seed no startup**: `Program.cs` lê `Docs/últimosjogos.md` via `HistoricoSeeder`
   e popula `HistoricoStore` antes de aceitar requisições
 - **API da Caixa**: requisições em batches de 5 para evitar rate-limit
