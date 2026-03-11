@@ -1,0 +1,313 @@
+@page "/dashboard"
+@using LotoFacil.Application.Filtros
+@using LotoFacil.Application.Services
+@using LotoFacil.Domain.Models
+@inject ConfiguracaoFiltros Config
+
+<PageTitle>Dashboard - Lotofácil</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-1" Color="Color.Primary">
+        <MudIcon Icon="@Icons.Material.Filled.Analytics" Size="Size.Large" Class="mr-2" />
+        Dashboard Estatístico
+    </MudText>
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-4">
+        Análise completa dos resultados históricos da Lotofácil
+    </MudText>
+
+    @if (HistoricoStore.Quantidade == 0)
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Importe os resultados históricos na aba <strong>Histórico</strong> para visualizar as estatísticas.
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @* Resumo *@
+            <MudItem xs="12">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <div class="d-flex flex-wrap gap-6 justify-center">
+                            <div class="text-center">
+                                <MudText Typo="Typo.h4" Color="Color.Primary">@_stats.TotalConcursos</MudText>
+                                <MudText Typo="Typo.caption">Concursos</MudText>
+                            </div>
+                            <div class="text-center">
+                                <MudText Typo="Typo.h4" Color="Color.Secondary">@_stats.MediaSoma.ToString("F1")</MudText>
+                                <MudText Typo="Typo.caption">Soma Média</MudText>
+                            </div>
+                            <div class="text-center">
+                                <MudText Typo="Typo.h4" Color="Color.Tertiary">@_stats.MediaPares.ToString("F1")</MudText>
+                                <MudText Typo="Typo.caption">Pares Médio</MudText>
+                            </div>
+                            <div class="text-center">
+                                <MudText Typo="Typo.h4" Color="Color.Info">@_stats.MediaRepeticaoConsecutiva.ToString("F1")</MudText>
+                                <MudText Typo="Typo.caption">Repetição Média</MudText>
+                            </div>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @* Heatmap de Frequência (grid 5x5) *@
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Frequência por Número (Cartela 5x5)</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div class="heatmap-grid">
+                            @for (int n = 1; n <= 25; n++)
+                            {
+                                var numero = n;
+                                var freq = _stats.Frequencia.GetValueOrDefault(numero);
+                                var pct = _stats.TotalConcursos > 0 ? (double)freq / _stats.TotalConcursos * 100 : 0;
+                                <MudTooltip Text="@($"{numero:D2}: {freq}x ({pct:F1}%)")">
+                                    <div class="heatmap-cell" style="@GetHeatmapStyle(pct)">
+                                        <span class="heatmap-num">@numero.ToString("D2")</span>
+                                        <span class="heatmap-freq">@freq</span>
+                                    </div>
+                                </MudTooltip>
+                            }
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @* Delay *@
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Delay (concursos desde última aparição)</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div class="heatmap-grid">
+                            @for (int n = 1; n <= 25; n++)
+                            {
+                                var numero = n;
+                                var d = _stats.Delay.GetValueOrDefault(numero, -1);
+                                var label = d < 0 ? "N/A" : d.ToString();
+                                <MudTooltip Text="@($"{numero:D2}: {label} concursos atrás")">
+                                    <div class="heatmap-cell" style="@GetDelayStyle(d)">
+                                        <span class="heatmap-num">@numero.ToString("D2")</span>
+                                        <span class="heatmap-freq">@label</span>
+                                    </div>
+                                </MudTooltip>
+                            }
+                        </div>
+                        <div class="d-flex justify-space-between mt-2">
+                            <MudText Typo="Typo.caption" Color="Color.Success">Recente</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Error">Ausente</MudText>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @* Distribuição de Pares *@
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Distribuição de Pares</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @foreach (var kv in _stats.DistribuicaoPares.OrderBy(x => x.Key))
+                        {
+                            var pct = _stats.TotalConcursos > 0 ? (double)kv.Value / _stats.TotalConcursos * 100 : 0;
+                            <div class="d-flex align-center gap-2 mb-1">
+                                <MudText Typo="Typo.body2" Style="min-width:65px">@kv.Key pares</MudText>
+                                <MudProgressLinear Value="pct" Color="Color.Primary" Style="flex:1" />
+                                <MudText Typo="Typo.caption" Style="min-width:75px">@kv.Value (@pct.ToString("F1")%)</MudText>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @* Distribuição de Soma *@
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Distribuição de Soma</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @{
+                            var ordemSoma = new[] { "< 170", "170-185", "186-200", "201-210", "211-220", "> 220" };
+                        }
+                        @foreach (var faixa in ordemSoma)
+                        {
+                            var count = _stats.DistribuicaoSoma.GetValueOrDefault(faixa);
+                            var pct = _stats.TotalConcursos > 0 ? (double)count / _stats.TotalConcursos * 100 : 0;
+                            <div class="d-flex align-center gap-2 mb-1">
+                                <MudText Typo="Typo.body2" Style="min-width:65px">@faixa</MudText>
+                                <MudProgressLinear Value="pct" Color="Color.Secondary" Style="flex:1" />
+                                <MudText Typo="Typo.caption" Style="min-width:75px">@count (@pct.ToString("F1")%)</MudText>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @* Distribuição por Linhas *@
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Números por Linha (média)</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @for (int linha = 0; linha < 5; linha++)
+                        {
+                            var inicio = linha * 5 + 1;
+                            var fim = inicio + 4;
+                            var dist = _stats.DistribuicaoLinhas.GetValueOrDefault(linha, new());
+                            var media = dist.Count > 0
+                                ? dist.Sum(kv => kv.Key * kv.Value) / (double)dist.Values.Sum()
+                                : 0;
+                            <div class="d-flex align-center gap-2 mb-1">
+                                <MudText Typo="Typo.body2" Style="min-width:65px">@($"{inicio:D2}-{fim:D2}")</MudText>
+                                <MudProgressLinear Value="@(media / 5.0 * 100)" Color="Color.Tertiary" Style="flex:1" />
+                                <MudText Typo="Typo.caption" Style="min-width:40px">@media.ToString("F1")</MudText>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            @* Monte Carlo *@
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Simulação Monte Carlo</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudNumericField @bind-Value="_monteCarloQtd"
+                                         Label="Simulações"
+                                         Min="1000" Max="1000000"
+                                         Variant="Variant.Outlined"
+                                         Adornment="Adornment.Start"
+                                         AdornmentIcon="@Icons.Material.Filled.Science" />
+
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.PlayArrow"
+                                   OnClick="ExecutarMonteCarlo"
+                                   Disabled="_simulando"
+                                   Class="mt-3">
+                            @if (_simulando)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                <span>Simulando...</span>
+                            }
+                            else
+                            {
+                                <span>Executar Simulação</span>
+                            }
+                        </MudButton>
+
+                        @if (_monteCarloResult is not null)
+                        {
+                            <MudSimpleTable Dense="true" Hover="true" Class="mt-3">
+                                <tbody>
+                                    <tr>
+                                        <td><strong>Aprovados pelos filtros</strong></td>
+                                        <td>@_monteCarloResult.Aprovados.ToString("N0") (@_monteCarloResult.TaxaAprovacao.ToString("F1")%)</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Reprovados</strong></td>
+                                        <td>@_monteCarloResult.Reprovados.ToString("N0")</td>
+                                    </tr>
+                                    @for (int p = 15; p >= 11; p--)
+                                    {
+                                        var pontos = p;
+                                        var pct = _monteCarloResult.PercentualAcertos(pontos);
+                                        <tr>
+                                            <td><strong>@pontos acertos</strong></td>
+                                            <td>
+                                                @_monteCarloResult.AcertosDistribuicao.GetValueOrDefault(pontos).ToString("N0")
+                                                (@pct.ToString("F4")%)
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </MudSimpleTable>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private EstatisticasResultado _stats = EstatisticasResultado.Vazio();
+    private MonteCarloResultado? _monteCarloResult;
+    private int _monteCarloQtd = 100_000;
+    private bool _simulando;
+
+    protected override void OnInitialized()
+    {
+        var resultados = HistoricoStore.Resultados;
+        if (resultados.Count > 0)
+        {
+            var service = new EstatisticasService();
+            _stats = service.Analisar(resultados);
+        }
+    }
+
+    private async Task ExecutarMonteCarlo()
+    {
+        _simulando = true;
+        StateHasChanged();
+        await Task.Delay(50);
+
+        var filtroService = CriarFiltroService();
+
+        List<int>? baseInteligente = null;
+        if (Config.ModoInteligente && _stats.TotalConcursos > 0)
+        {
+            var statsService = new EstatisticasService();
+            baseInteligente = statsService.SelecionarBaseInteligente(_stats);
+        }
+
+        var monteCarlo = new MonteCarloService();
+        _monteCarloResult = monteCarlo.Simular(_monteCarloQtd, filtroService, baseInteligente);
+
+        _simulando = false;
+    }
+
+    private FiltroService CriarFiltroService()
+    {
+        var service = new FiltroService();
+        service.Registrar(new ParidadeFiltro(Config));
+        service.Registrar(new SomaFiltro(Config));
+        service.Registrar(new FaixasFiltro(Config));
+        service.Registrar(new PrimosFiltro(Config));
+        service.Registrar(new FibonacciFiltro(Config));
+        service.Registrar(new SequenciasFiltro(Config));
+        service.Registrar(new NumerosAltosFiltro(Config));
+        return service;
+    }
+
+    private string GetHeatmapStyle(double pct)
+    {
+        var intensity = Math.Clamp(pct / 80.0, 0, 1);
+        int r = (int)(255 * intensity);
+        int g = (int)(100 * (1 - intensity));
+        int b = (int)(50 * (1 - intensity));
+        return $"background-color:rgba({r},{g},{b},0.85);color:white";
+    }
+
+    private string GetDelayStyle(int delay)
+    {
+        if (delay < 0) return "background-color:#9E9E9E;color:white";
+        if (delay == 0) return "background-color:#2E7D32;color:white";
+        var intensity = Math.Clamp(delay / 10.0, 0, 1);
+        int r = (int)(200 * intensity + 46 * (1 - intensity));
+        int g = (int)(50 * intensity + 125 * (1 - intensity));
+        int b = (int)(50 * intensity + 50 * (1 - intensity));
+        return $"background-color:rgb({r},{g},{b});color:white";
+    }
+}

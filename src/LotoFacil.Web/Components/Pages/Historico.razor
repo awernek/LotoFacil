@@ -1,0 +1,255 @@
+@page "/historico"
+@using LotoFacil.Application.Services
+@using LotoFacil.Domain.Interfaces
+@using LotoFacil.Domain.Models
+@inject ICaixaApiClient CaixaClient
+@inject ISnackbar Snackbar
+
+<PageTitle>Histórico - Lotofácil</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-1" Color="Color.Primary">
+        <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" Class="mr-2" />
+        Histórico de Resultados
+    </MudText>
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-4">
+        Importe resultados da Caixa para análise e filtragem
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudNumericField @bind-Value="_quantidade"
+                                     Label="Últimos N concursos"
+                                     Min="1" Max="500"
+                                     Variant="Variant.Outlined"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.Download" />
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.CloudDownload"
+                               OnClick="ImportarResultados"
+                               Disabled="_importando"
+                               Class="mt-3">
+                        @if (_importando)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Importando...</span>
+                        }
+                        else
+                        {
+                            <span>Importar da Caixa</span>
+                        }
+                    </MudButton>
+
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                        @HistoricoStore.Quantidade concursos carregados
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+
+            @if (_resultados.Count > 0)
+            {
+                <MudCard Elevation="2" Class="mt-3">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Números Quentes</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                            Mais frequentes nos últimos @_resultados.Count concursos
+                        </MudText>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var (numero, freq) in GetNumerosQuentes())
+                            {
+                                <MudTooltip Text="@($"{freq} vezes")">
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">
+                                        @numero.ToString("D2")
+                                    </MudChip>
+                                </MudTooltip>
+                            }
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+
+                <MudCard Elevation="2" Class="mt-3">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Números Frios</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                            Menos frequentes nos últimos @_resultados.Count concursos
+                        </MudText>
+                        <div class="d-flex flex-wrap gap-1">
+                            @foreach (var (numero, freq) in GetNumerosFrios())
+                            {
+                                <MudTooltip Text="@($"{freq} vezes")">
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">
+                                        @numero.ToString("D2")
+                                    </MudChip>
+                                </MudTooltip>
+                            }
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+
+                <MudCard Elevation="2" Class="mt-3">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Frequência Completa</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @foreach (var (numero, freq) in GetFrequenciaCompleta())
+                        {
+                            var pct = _resultados.Count > 0 ? (double)freq / _resultados.Count * 100 : 0;
+                            <div class="d-flex align-center gap-2 mb-1">
+                                <MudText Typo="Typo.body2" Style="min-width:30px">@numero.ToString("D2")</MudText>
+                                <MudProgressLinear Value="pct" Color="@GetCorFrequencia(pct)" Style="flex:1" />
+                                <MudText Typo="Typo.caption" Style="min-width:55px">@freq (@pct.ToString("F0")%)</MudText>
+                            </div>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            @if (_resultados.Count > 0)
+            {
+                <ErrorBoundary>
+                    <ChildContent>
+                        <MudDataGrid Items="_resultados" Dense="true" Hover="true" Striped="true"
+                                     FixedHeader="true" Height="calc(100vh - 150px)">
+                            <Columns>
+                                <PropertyColumn Property="x => x.Concurso" Title="Concurso" />
+                                <TemplateColumn Title="Data">
+                                    <CellTemplate>
+                                        @(context.Item.Data == DateTime.MinValue ? "—" : context.Item.Data.ToString("dd/MM/yyyy"))
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn Title="Números Sorteados">
+                                    <CellTemplate>
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var n in context.Item.Numeros)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                                         Style="@GetEstiloNumero(n)">
+                                                    @n.ToString("D2")
+                                                </MudChip>
+                                            }
+                                        </div>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn Title="Soma">
+                                    <CellTemplate>
+                                        @context.Item.Numeros.Sum()
+                                    </CellTemplate>
+                                </TemplateColumn>
+                            </Columns>
+                        </MudDataGrid>
+                    </ChildContent>
+                    <ErrorContent>
+                        <MudAlert Severity="Severity.Error" Class="mt-2">
+                            Erro ao renderizar a tabela. Os dados foram importados com sucesso — recarregue a página para ver.
+                        </MudAlert>
+                    </ErrorContent>
+                </ErrorBoundary>
+            }
+            else
+            {
+                <MudPaper Elevation="0" Class="d-flex align-center justify-center" Style="min-height:300px">
+                    <div class="text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudDownload" Size="Size.Large"
+                                 Color="Color.Primary" Style="font-size:4rem;opacity:0.3" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2">
+                            Importe os resultados da Caixa para começar a análise
+                        </MudText>
+                    </div>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private int _quantidade = 50;
+    private bool _importando;
+    private List<ResultadoHistorico> _resultados = [];
+
+    protected override void OnInitialized()
+    {
+        _resultados = HistoricoStore.Resultados.ToList();
+    }
+
+    private async Task ImportarResultados()
+    {
+        try
+        {
+            _importando = true;
+            StateHasChanged();
+
+            var resultados = await CaixaClient.ObterResultadosAsync(_quantidade);
+            HistoricoStore.Atualizar(resultados);
+            _resultados = resultados.ToList();
+            Snackbar.Add($"{resultados.Count} concursos importados com sucesso!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao importar: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _importando = false;
+            StateHasChanged();
+        }
+    }
+
+    private Dictionary<int, int> CalcularFrequencia()
+    {
+        var freq = Enumerable.Range(1, 25).ToDictionary(n => n, _ => 0);
+        foreach (var resultado in _resultados)
+        {
+            foreach (var numero in resultado.Numeros)
+            {
+                if (freq.ContainsKey(numero))
+                    freq[numero]++;
+            }
+        }
+        return freq;
+    }
+
+    private IEnumerable<(int Numero, int Freq)> GetNumerosQuentes()
+        => CalcularFrequencia()
+            .OrderByDescending(kv => kv.Value)
+            .Take(10)
+            .Select(kv => (kv.Key, kv.Value));
+
+    private IEnumerable<(int Numero, int Freq)> GetNumerosFrios()
+        => CalcularFrequencia()
+            .OrderBy(kv => kv.Value)
+            .Take(10)
+            .Select(kv => (kv.Key, kv.Value));
+
+    private IEnumerable<(int Numero, int Freq)> GetFrequenciaCompleta()
+        => CalcularFrequencia()
+            .OrderBy(kv => kv.Key)
+            .Select(kv => (kv.Key, kv.Value));
+
+    private static string GetEstiloNumero(int numero) => numero switch
+    {
+        <= 5 => "background-color:#1565C0;color:white",
+        <= 10 => "background-color:#2E7D32;color:white",
+        <= 15 => "background-color:#E65100;color:white",
+        <= 20 => "background-color:#6A1B9A;color:white",
+        _ => "background-color:#C62828;color:white"
+    };
+
+    private static Color GetCorFrequencia(double pct) => pct switch
+    {
+        >= 70 => Color.Error,
+        >= 55 => Color.Warning,
+        _ => Color.Info
+    };
+}

@@ -1,0 +1,326 @@
+@page "/"
+@using LotoFacil.Application.Filtros
+@using LotoFacil.Application.Services
+@using LotoFacil.Domain.Interfaces
+@using LotoFacil.Domain.Models
+@inject ConfiguracaoFiltros Config
+@inject ICaixaApiClient CaixaClient
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Gerador Lotofácil</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-1" Color="Color.Primary">
+        <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" Class="mr-2" />
+        Gerador Lotofácil
+    </MudText>
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-4">
+        Gere jogos inteligentes com filtros estatísticos
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudCard Elevation="3">
+                <MudCardContent>
+                    <MudNumericField @bind-Value="_quantidade"
+                                     Label="Quantidade de Jogos"
+                                     Min="1" Max="500"
+                                     Variant="Variant.Outlined"
+                                     Adornment="Adornment.Start"
+                                     AdornmentIcon="@Icons.Material.Filled.FormatListNumbered" />
+
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.PlayArrow"
+                               OnClick="GerarJogos"
+                               Disabled="_gerando"
+                               Class="mt-3">
+                        @if (_gerando)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Gerando...</span>
+                        }
+                        else
+                        {
+                            <span>Gerar Jogos</span>
+                        }
+                    </MudButton>
+                </MudCardContent>
+            </MudCard>
+
+            @if (_resultado is not null)
+            {
+                <MudCard Elevation="2" Class="mt-3">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Estatísticas</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Jogos gerados</strong></td>
+                                    <td>@_resultado.Jogos.Count</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Tentativas</strong></td>
+                                    <td>@_resultado.TentativasTotal.ToString("N0")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Descartados</strong></td>
+                                    <td>@_resultado.Descartados.ToString("N0")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Taxa de aprovação</strong></td>
+                                    <td>@_resultado.TaxaAprovacao.ToString("F1")%</td>
+                                </tr>
+                                @if (_resultado.Jogos.Count > 0)
+                                {
+                                    <tr>
+                                        <td><strong>Soma média</strong></td>
+                                        <td>@_resultado.Jogos.Average(j => j.Soma).ToString("F1")</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Pares médio</strong></td>
+                                        <td>@_resultado.Jogos.Average(j => j.Pares).ToString("F1")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudCardContent>
+                </MudCard>
+
+                <MudCard Elevation="2" Class="mt-3">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">Legenda de Faixas</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <div class="d-flex flex-wrap gap-2">
+                            <MudChip T="string" Style="background-color:#1565C0;color:white">01-05</MudChip>
+                            <MudChip T="string" Style="background-color:#2E7D32;color:white">06-10</MudChip>
+                            <MudChip T="string" Style="background-color:#E65100;color:white">11-15</MudChip>
+                            <MudChip T="string" Style="background-color:#6A1B9A;color:white">16-20</MudChip>
+                            <MudChip T="string" Style="background-color:#C62828;color:white">21-25</MudChip>
+                        </div>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            @if (_resultado is not null && _resultado.Jogos.Count > 0)
+            {
+                <div class="d-flex justify-space-between align-center mb-3">
+                    <MudToggleGroup T="string" @bind-Value="_modoExibicao" Color="Color.Primary"
+                                    Size="Size.Small">
+                        <MudToggleItem T="string" Value="@("cards")" Text="Cards" />
+                        <MudToggleItem T="string" Value="@("lista")" Text="Lista p/ Copiar" />
+                    </MudToggleGroup>
+                </div>
+
+                @if (_modoExibicao == "lista")
+                {
+                    <MudCard Elevation="2">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">Lista de Jogos</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudButtonGroup Size="Size.Small">
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="@(_copiado ? Color.Success : Color.Primary)"
+                                               StartIcon="@(_copiado ? Icons.Material.Filled.Check : Icons.Material.Filled.ContentCopy)"
+                                               OnClick="CopiarTodos">
+                                        @(_copiado ? "Copiado!" : "Copiar")
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Description"
+                                               OnClick="ExportarTxt">
+                                        TXT
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.TableChart"
+                                               OnClick="ExportarCsv">
+                                        CSV
+                                    </MudButton>
+                                </MudButtonGroup>
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <pre style="font-family:'Cascadia Mono','Consolas',monospace;font-size:0.9rem;line-height:1.8;user-select:all;white-space:pre-wrap;background:transparent;margin:0">@GerarTextoLista()</pre>
+                        </MudCardContent>
+                    </MudCard>
+                }
+                else
+                {
+                    <MudGrid>
+                        @for (int i = 0; i < _resultado.Jogos.Count; i++)
+                        {
+                            var idx = i;
+                            <MudItem xs="12" sm="6" lg="4">
+                                <JogoCard Jogo="_resultado.Jogos[idx]" Indice="idx + 1" />
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            }
+            else if (_resultado is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-2">
+                    Nenhum jogo passou nos filtros após @_resultado.TentativasTotal.ToString("N0") tentativas.
+                    Com histórico carregado e Modo Inteligente, há poucas combinações possíveis.
+                    Tente: desativar Modo Inteligente, desativar "Evitar jogos já sorteados" ou relaxar outros filtros na Configuração.
+                </MudAlert>
+            }
+            else
+            {
+                <MudPaper Elevation="0" Class="d-flex align-center justify-center" Style="min-height:300px">
+                    <div class="text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" Color="Color.Primary" Style="font-size:4rem;opacity:0.3" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mt-2">
+                            Configure e clique em "Gerar Jogos"
+                        </MudText>
+                    </div>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private int _quantidade = 10;
+    private bool _gerando;
+    private bool _copiado;
+    private string _modoExibicao = "cards";
+    private ResultadoGeracao? _resultado;
+
+    private async Task GerarJogos()
+    {
+        _gerando = true;
+        StateHasChanged();
+
+        try
+        {
+            await Task.Delay(50);
+
+            var filtroService = CriarFiltroService();
+            var gerador = new GeradorDeJogos(filtroService);
+
+            if (Config.ModoInteligente)
+            {
+                var resultados = ObterHistoricoCache();
+                if (resultados.Count > 0)
+                {
+                    var statsService = new EstatisticasService();
+                    var stats = statsService.Analisar(resultados);
+                    var pesos = statsService.ObterPesosInteligentes(stats);
+                    gerador.DefinirPesosInteligentes(pesos);
+                    gerador.DefinirContextoHistorico(stats, resultados[0].Numeros);
+
+                    var patternService = new PatternStatisticsService();
+                    var patternStats = patternService.Analisar(resultados);
+
+                    var correlationService = new NumberCorrelationService();
+                    var correlationMatrix = correlationService.Construir(resultados);
+
+                    var lastDrawAnalyzer = new LastDrawAnalyzer();
+                    var lastDrawProfile = lastDrawAnalyzer.Analisar(resultados);
+
+                    gerador.DefinirContextoEstatistico(patternStats, correlationMatrix, lastDrawProfile);
+                }
+            }
+
+            var quantidade = _quantidade;
+            var modoRanqueado = Config.ModoRanqueado;
+            var tamanhoPool = Config.TamanhoPoolRanqueado;
+
+            _resultado = await Task.Run(() => modoRanqueado
+                ? gerador.GerarRanqueado(quantidade, tamanhoPool)
+                : gerador.Gerar(quantidade));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao gerar jogos: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _gerando = false;
+            StateHasChanged();
+        }
+    }
+
+    private FiltroService CriarFiltroService()
+    {
+        var service = new FiltroService();
+
+        service.Registrar(new ParidadeFiltro(Config));
+        service.Registrar(new SomaFiltro(Config));
+        service.Registrar(new FaixasFiltro(Config));
+        service.Registrar(new PrimosFiltro(Config));
+        service.Registrar(new FibonacciFiltro(Config));
+        service.Registrar(new SequenciasFiltro(Config));
+        service.Registrar(new NumerosAltosFiltro(Config));
+
+        var resultados = ObterHistoricoCache();
+
+        var historicoFiltro = new HistoricoFiltro(Config);
+        if (Config.Historico.Ativo && resultados.Count > 0)
+            historicoFiltro.CarregarHistorico(resultados);
+        service.Registrar(historicoFiltro);
+
+        var repeticaoFiltro = new RepeticaoUltimoFiltro(Config);
+        if (resultados.Count > 0)
+            repeticaoFiltro.CarregarUltimoResultado(resultados[0].Numeros);
+        service.Registrar(repeticaoFiltro);
+
+        return service;
+    }
+
+    private IReadOnlyList<ResultadoHistorico> ObterHistoricoCache()
+    {
+        return HistoricoStore.Resultados;
+    }
+
+    private string GerarTextoLista()
+    {
+        if (_resultado is null) return string.Empty;
+        return string.Join("\n", _resultado.Jogos.Select(j =>
+            string.Join(" ", j.Numeros.Select(n => n.ToString("D2")))));
+    }
+
+    private async Task CopiarTodos()
+    {
+        var texto = GerarTextoLista();
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", texto);
+        _copiado = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        _copiado = false;
+    }
+
+    private async Task ExportarTxt()
+    {
+        var texto = GerarTextoLista();
+        await DownloadArquivo("lotofacil-jogos.txt", texto, "text/plain");
+    }
+
+    private async Task ExportarCsv()
+    {
+        if (_resultado is null) return;
+        var csv = string.Join("\n", _resultado.Jogos.Select(j =>
+            string.Join(",", j.Numeros.Select(n => n.ToString("D2")))));
+        await DownloadArquivo("lotofacil-jogos.csv", csv, "text/csv");
+    }
+
+    private async Task DownloadArquivo(string nomeArquivo, string conteudo, string mimeType)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(conteudo);
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("eval",
+            $"const a=document.createElement('a');a.href='data:{mimeType};base64,{base64}';a.download='{nomeArquivo}';a.click()");
+    }
+}

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\LotoFacil.Application\LotoFacil.Application.csproj" />
+    <ProjectReference Include="..\LotoFacil.Infrastructure\LotoFacil.Infrastructure.csproj" />
+    <ProjectReference Include="..\LotoFacil.Domain\LotoFacil.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MudBlazor" Version="9.1.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+  </PropertyGroup>
+
+</Project>

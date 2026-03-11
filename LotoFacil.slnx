@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LotoFacil.Application/LotoFacil.Application.csproj" />
+    <Project Path="src/LotoFacil.Domain/LotoFacil.Domain.csproj" />
+    <Project Path="src/LotoFacil.Infrastructure/LotoFacil.Infrastructure.csproj" />
+    <Project Path="src/LotoFacil.Web/LotoFacil.Web.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,174 @@
+# Init - Gerador de Jogos Lotofácil
+
+Contexto técnico do projeto para onboarding de agentes de IA.
+
+## Visão geral
+
+Aplicação Blazor Server (.NET 10) que gera jogos da Lotofácil aplicando filtros estatísticos configuráveis e amostragem ponderada por frequência histórica. A Lotofácil sorteia 15 números de 1 a 25. **Nenhuma estratégia melhora as chances de ganhar** — a probabilidade é sempre 1/3.268.760.
+
+## Solution
+
+```
+LotoFacil.sln
+├── src/LotoFacil.Domain         (classlib, sem dependências externas)
+├── src/LotoFacil.Application    (classlib, referencia Domain)
+├── src/LotoFacil.Infrastructure (classlib, referencia Domain)
+└── src/LotoFacil.Web            (Blazor Server, referencia todos)
+```
+
+## Dependências
+
+- **Target**: `net10.0`
+- **MudBlazor** `9.1.0` — componentes UI (Cards, DataGrid, Switches, Snackbar, etc.)
+- Sem banco de dados, sem EF Core, sem autenticação
+
+## Convenções do código
+
+- Idioma: **C#** para tipos e membros; **português** para textos de UI e labels
+- Models usam `record` (imutáveis) exceto `ConfiguracaoFiltros` e `FiltroFaixas` que são `class` (mutáveis pela UI)
+- Filtros seguem **Strategy Pattern**: todos implementam `IFiltro` com `Nome`, `Ativo` e `Validar(Jogo)`
+- DI: `ConfiguracaoFiltros` é **Scoped** (por sessão Blazor); `ICaixaApiClient` via `AddHttpClient`
+- `HistoricoStore` é **estático** (compartilhado entre sessões, thread-safe com `Lock`)
+- Render mode: `<Routes @rendermode="InteractiveServer">` em `App.razor` — NÃO há `@rendermode` nas páginas individuais nem no layout
+
+## Histórico base
+
+`Program.cs` lê `Docs/últimosjogos.md` no startup via `HistoricoSeeder.Parsear()` e popula `HistoricoStore`. Formato do arquivo: uma linha por concurso, `"3632 - 01 02 03 05 06 09 10 15 17 19 20 21 22 23 25"`. Contém 367 concursos (3266–3632).
+
+## Algoritmo de geração — detalhado
+
+### Rejection sampling com filtros
+
+```csharp
+// GeradorDeJogos.Gerar(int quantidade)
+while (jogos.Count < quantidade && tentativas < quantidade * 10_000):
+    numeros = _pesosInteligentes is not null
+        ? SortearPonderado(_pesosInteligentes, 15)   // modo inteligente
+        : Enumerable.Range(1,25).OrderBy(_=>Random.Shared.Next()).Take(15) // uniforme
+    jogo = Jogo.Criar(numeros)
+    if duplicatas.Contains(jogo.Chave): continue
+    if !filtroService.Validar(jogo): continue
+    duplicatas.Add(jogo.Chave)
+    jogos.Add(jogo)
+```
+
+### Amostragem ponderada sem reposição (Modo Inteligente)
+
+```csharp
+// GeradorDeJogos.SortearPonderado(pesos, 15)
+pool = cópia do dicionário {numero -> peso}
+para i in 1..15:
+    totalPeso = pool.Values.Sum()
+    corte = Random.Shared.NextDouble() * totalPeso
+    acumulado = 0
+    para (numero, peso) in pool:
+        acumulado += peso
+        escolhido = numero
+        if acumulado >= corte: break
+    resultado.Add(escolhido)
+    pool.Remove(escolhido)
+```
+
+**Fórmula dos pesos** (`EstatisticasService.ObterPesosInteligentes`):
+```
+peso[n] = (freq[n] - minFreq) / range × 0.14 + 0.93
+```
+Resulta em faixa `[0.93, 1.07]` — razão máx/mín ≈ 1.15×. Com 15 sorteios de 25 números, o número mais frequente tem ~64% de chance de aparecer num jogo vs ~58% do menos frequente.
+
+### Modo Ranqueado
+
+```csharp
+// GeradorDeJogos.GerarRanqueado(quantidade, tamanhoPool=5000)
+candidatos = gerar 5.000 jogos válidos com score calculado
+ordenar por GameScorer.CalcularScore() desc
+selecionados = [escolher aleatório entre top-5]
+enquanto selecionados.Count < quantidade:
+    próximo = candidato restante com maior diversidade mínima
+               (diversidade = números diferentes em relação a todos os já selecionados)
+```
+
+## Filtros padrão
+
+| Filtro | Classe | Min | Max | Ativo |
+|--------|--------|-----|-----|-------|
+| Paridade | `ParidadeFiltro` | 6 | 9 | Sim |
+| Soma | `SomaFiltro` | 185 | 210 | Sim |
+| Faixas | `FaixasFiltro` | 2/faixa | 4/faixa | Sim |
+| Histórico | `HistoricoFiltro` | — | — | Sim |
+| Repetição último | `RepeticaoUltimoFiltro` | 5 | 11 | Sim |
+| Sequências | `SequenciasFiltro` | 4 | 10 | **Não** |
+| Primos | `PrimosFiltro` | 4 | 7 | **Não** |
+| Fibonacci | `FibonacciFiltro` | 3 | 6 | **Não** |
+| Números Altos | `NumerosAltosFiltro` | 0 | 3 | **Não** |
+
+> **Sequências desativada por padrão**: a média histórica de pares consecutivos em
+> jogos de 15/25 é ≈ 8,4. Com max=4 (valor anterior), ~95% dos jogos eram
+> descartados e os aprovados sempre incluíam 01 e 25 (números de borda com
+> apenas um vizinho possível, que reduzem a contagem de pares consecutivos).
+
+## Arquitetura por camada
+
+### Domain
+
+- `Jogo` — record com `Numeros` (IReadOnlyList<int>), props computadas `Soma`, `Pares`, `Impares`, `Chave`
+- `ConfiguracaoFiltros` — classe mutável com propriedade por filtro + `ModoInteligente` (bool) + `ModoRanqueado` (bool). Filtros de range usam `FiltroRange` (record: Nome, Ativo, Min, Max, LimiteMin, LimiteMax)
+- `ResultadoHistorico` — record (Concurso, Data, Numeros)
+- `IFiltro` — `string Nome`, `bool Ativo`, `bool Validar(Jogo jogo)`
+- `ICaixaApiClient` — `ObterResultadosAsync(int quantidade)`, `ObterUltimoResultadoAsync()`
+
+### Application
+
+**Filtros** — todos recebem `ConfiguracaoFiltros` via construtor e leem limiares dele.
+
+**Services:**
+- `FiltroService` — mantém `List<IFiltro>`, método `Validar(Jogo)` aplica todos os ativos
+- `GeradorDeJogos` — rejection sampling com `SortearPonderado` ou uniforme; `DefinirPesosInteligentes(Dictionary<int,double>)` habilita modo inteligente
+- `HistoricoStore` — cache estático thread-safe; `Atualizar(IReadOnlyList<ResultadoHistorico>)` e `Resultados` (ordenado desc por concurso)
+- `HistoricoSeeder` — `Parsear(IEnumerable<string>)` para formato `"NNNN - 01 02 ... 25"`
+- `EstatisticasService` — `Analisar()` retorna `EstatisticasResultado` (frequência, delay, quentes/frios, médias, distribuições); `ObterPesosInteligentes()` retorna pesos [0.93, 1.07]
+- `MonteCarloService` — simula N jogos, conta aprovados e distribui acertos (11-15 pontos)
+
+### Infrastructure
+
+- `CaixaApiClient` — `GET https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/{concurso?}`. Batches de 5 requisições simultâneas. Headers de browser para tentar contornar 403. Parse manual via `System.Text.Json` (campos: `numero`, `dataApuracao`, `listaDezenas`)
+
+### Web
+
+- `App.razor` — `<Routes @rendermode="InteractiveServer">` define o modo interativo para toda a árvore
+- `MainLayout.razor` — providers do MudBlazor (`MudPopoverProvider`, `MudSnackbarProvider`, etc.) ficam acessíveis porque estão no mesmo circuito interativo do Routes
+- `Home.razor` — gerador principal; chama `ObterPesosInteligentes` + `DefinirPesosInteligentes` quando ModoInteligente ativo; todo o `GerarJogos()` envolto em try/catch/finally
+- `Configuracao.razor` — persiste via `ConfiguracaoStorage` (localStorage)
+- `Historico.razor` — importa da Caixa, exibe tabela com ErrorBoundary em volta do DataGrid
+- `Dashboard.razor` — heatmaps de frequência e delay, Monte Carlo
+
+## Fluxo de geração
+
+```
+Home.GerarJogos()
+  → CriarFiltroService() com 8 filtros lendo Config (scoped)
+  → new GeradorDeJogos(filtroService)
+  → se ModoInteligente && histórico disponível:
+      → EstatisticasService.Analisar(HistoricoStore.Resultados)
+      → EstatisticasService.ObterPesosInteligentes(stats)  // [0.93, 1.07]
+      → GeradorDeJogos.DefinirPesosInteligentes(pesos)
+  → se ModoRanqueado:
+      → GeradorDeJogos.GerarRanqueado(quantidade, tamanhoPool)
+  → senão:
+      → GeradorDeJogos.Gerar(quantidade)
+  → retorna ResultadoGeracao (jogos, tentativas, descartados, taxa)
+```
+
+## Para adicionar um novo filtro
+
+1. Criar classe em `Application/Filtros/` implementando `IFiltro`
+2. Adicionar propriedade em `ConfiguracaoFiltros` (Domain) com default sensato
+3. Registrar no `CriarFiltroService()` de `Home.razor`
+4. Adicionar card de configuração em `Configuracao.razor`
+
+## Comandos úteis
+
+```bash
+dotnet build                              # compilar tudo
+dotnet run --project src/LotoFacil.Web    # rodar (http://localhost:5252)
+dotnet watch --project src/LotoFacil.Web  # hot reload
+```

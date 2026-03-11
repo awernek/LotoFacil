@@ -1,0 +1,50 @@
+.jogo-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.jogo-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.numeros-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+}
+
+::deep .faixa-1 {
+    background-color: #1565C0 !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+::deep .faixa-2 {
+    background-color: #2E7D32 !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+::deep .faixa-3 {
+    background-color: #E65100 !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+::deep .faixa-4 {
+    background-color: #6A1B9A !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+::deep .faixa-5 {
+    background-color: #C62828 !important;
+    color: white !important;
+    font-weight: 600;
+    font-size: 0.8rem;
+}

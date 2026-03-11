@@ -1,0 +1,342 @@
+@page "/configuracao"
+@using LotoFacil.Domain.Models
+@inject ConfiguracaoFiltros Config
+@inject ConfiguracaoStorage ConfigStorage
+@inject ISnackbar Snackbar
+
+<PageTitle>Configuração - Lotofácil</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4">
+    <MudText Typo="Typo.h4" Class="mb-1" Color="Color.Primary">
+        <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Large" Class="mr-2" />
+        Configuração dos Filtros
+    </MudText>
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-4">
+        Ajuste os critérios para geração dos jogos. As configurações são salvas no navegador.
+    </MudText>
+
+    <MudGrid>
+        @* Paridade *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Paridade.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.Paridade.Ativo"
+                                   ValueChanged="v => Config.Paridade = Config.Paridade with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Quantidade de números pares no jogo (de 15)
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.Paridade.Min"
+                                         ValueChanged="v => Config.Paridade = Config.Paridade with { Min = v }"
+                                         Min="Config.Paridade.LimiteMin" Max="Config.Paridade.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.Paridade.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.Paridade.Max"
+                                         ValueChanged="v => Config.Paridade = Config.Paridade with { Max = v }"
+                                         Min="Config.Paridade.Min" Max="Config.Paridade.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.Paridade.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Soma *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Soma.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.Soma.Ativo"
+                                   ValueChanged="v => Config.Soma = Config.Soma with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Faixa da soma dos 15 números (mín possível: 120, máx possível: 270)
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.Soma.Min"
+                                         ValueChanged="v => Config.Soma = Config.Soma with { Min = v }"
+                                         Min="Config.Soma.LimiteMin" Max="Config.Soma.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.Soma.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.Soma.Max"
+                                         ValueChanged="v => Config.Soma = Config.Soma with { Max = v }"
+                                         Min="Config.Soma.Min" Max="Config.Soma.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.Soma.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Primos *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Primos.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.Primos.Ativo"
+                                   ValueChanged="v => Config.Primos = Config.Primos with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Primos até 25: 2, 3, 5, 7, 11, 13, 17, 19, 23 (9 no total)
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.Primos.Min"
+                                         ValueChanged="v => Config.Primos = Config.Primos with { Min = v }"
+                                         Min="Config.Primos.LimiteMin" Max="Config.Primos.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.Primos.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.Primos.Max"
+                                         ValueChanged="v => Config.Primos = Config.Primos with { Max = v }"
+                                         Min="Config.Primos.Min" Max="Config.Primos.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.Primos.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Fibonacci *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Fibonacci.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.Fibonacci.Ativo"
+                                   ValueChanged="v => Config.Fibonacci = Config.Fibonacci with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Fibonacci até 25: 1, 2, 3, 5, 8, 13, 21 (7 no total)
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.Fibonacci.Min"
+                                         ValueChanged="v => Config.Fibonacci = Config.Fibonacci with { Min = v }"
+                                         Min="Config.Fibonacci.LimiteMin" Max="Config.Fibonacci.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.Fibonacci.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.Fibonacci.Max"
+                                         ValueChanged="v => Config.Fibonacci = Config.Fibonacci with { Max = v }"
+                                         Min="Config.Fibonacci.Min" Max="Config.Fibonacci.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.Fibonacci.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Sequências *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Sequencias.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.Sequencias.Ativo"
+                                   ValueChanged="v => Config.Sequencias = Config.Sequencias with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Pares adjacentes consecutivos. Média histórica: ~8 por jogo (ex: 3,4 e 4,5 = 2 pares)
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.Sequencias.Min"
+                                         ValueChanged="v => Config.Sequencias = Config.Sequencias with { Min = v }"
+                                         Min="Config.Sequencias.LimiteMin" Max="Config.Sequencias.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.Sequencias.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.Sequencias.Max"
+                                         ValueChanged="v => Config.Sequencias = Config.Sequencias with { Max = v }"
+                                         Min="Config.Sequencias.Min" Max="Config.Sequencias.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.Sequencias.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Faixas *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Faixas.Nome</MudText>
+                        <MudSwitch T="bool" @bind-Value="Config.Faixas.Ativo" Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Mín/máx de números por faixa (1-5, 6-10, 11-15, 16-20, 21-25)
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mín por faixa" @bind-Value="Config.Faixas.MinPorFaixa"
+                                         Min="0" Max="Config.Faixas.MaxPorFaixa"
+                                         Variant="Variant.Outlined" Disabled="!Config.Faixas.Ativo" />
+                        <MudNumericField T="int" Label="Máx por faixa" @bind-Value="Config.Faixas.MaxPorFaixa"
+                                         Min="Config.Faixas.MinPorFaixa" Max="5"
+                                         Variant="Variant.Outlined" Disabled="!Config.Faixas.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Histórico *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.Historico.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.Historico.Ativo"
+                                   ValueChanged="v => Config.Historico = Config.Historico with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Descarta jogos idênticos a concursos já sorteados.
+                        Importe o histórico na aba "Histórico" para ativar este filtro.
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Info" Class="mt-2">
+                        @(LotoFacil.Application.Services.HistoricoStore.Quantidade) concursos carregados
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Repetição do Último Concurso *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.RepeticaoUltimo.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.RepeticaoUltimo.Ativo"
+                                   ValueChanged="v => Config.RepeticaoUltimo = Config.RepeticaoUltimo with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Quantos números podem se repetir em relação ao último concurso sorteado.
+                        Requer histórico importado.
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.RepeticaoUltimo.Min"
+                                         ValueChanged="v => Config.RepeticaoUltimo = Config.RepeticaoUltimo with { Min = v }"
+                                         Min="Config.RepeticaoUltimo.LimiteMin" Max="Config.RepeticaoUltimo.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.RepeticaoUltimo.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.RepeticaoUltimo.Max"
+                                         ValueChanged="v => Config.RepeticaoUltimo = Config.RepeticaoUltimo with { Max = v }"
+                                         Min="Config.RepeticaoUltimo.Min" Max="Config.RepeticaoUltimo.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.RepeticaoUltimo.Ativo" />
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Info" Class="mt-2">
+                        @(LotoFacil.Application.Services.HistoricoStore.Quantidade) concursos carregados
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Números Altos *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">@Config.NumerosAltos.Nome</MudText>
+                        <MudSwitch T="bool" Value="Config.NumerosAltos.Ativo"
+                                   ValueChanged="v => Config.NumerosAltos = Config.NumerosAltos with { Ativo = v }"
+                                   Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Quantidade de números na faixa 22-25. Estatisticamente, a maioria dos sorteios tem de 0 a 3.
+                    </MudText>
+                    <div class="d-flex gap-3">
+                        <MudNumericField T="int" Label="Mínimo" Value="Config.NumerosAltos.Min"
+                                         ValueChanged="v => Config.NumerosAltos = Config.NumerosAltos with { Min = v }"
+                                         Min="Config.NumerosAltos.LimiteMin" Max="Config.NumerosAltos.Max"
+                                         Variant="Variant.Outlined" Disabled="!Config.NumerosAltos.Ativo" />
+                        <MudNumericField T="int" Label="Máximo" Value="Config.NumerosAltos.Max"
+                                         ValueChanged="v => Config.NumerosAltos = Config.NumerosAltos with { Max = v }"
+                                         Min="Config.NumerosAltos.Min" Max="Config.NumerosAltos.LimiteMax"
+                                         Variant="Variant.Outlined" Disabled="!Config.NumerosAltos.Ativo" />
+                    </div>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Modo Inteligente *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">Geração Inteligente</MudText>
+                        <MudSwitch T="bool" @bind-Value="Config.ModoInteligente" Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        Em vez de sortear de 1-25 aleatoriamente, usa uma base de 18 números
+                        ponderada pela frequência histórica (9 quentes + 6 médios + 3 frios).
+                        Requer histórico importado.
+                    </MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Modo Ranqueado (diversificação) *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="2">
+                <MudCardContent>
+                    <div class="d-flex justify-space-between align-center mb-3">
+                        <MudText Typo="Typo.h6">Modo Ranqueado</MudText>
+                        <MudSwitch T="bool" @bind-Value="Config.ModoRanqueado" Color="Color.Primary" />
+                    </div>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                        Gera um pool grande, ranqueia por score estatístico e seleciona os jogos
+                        combinando alta pontuação com diversidade entre eles.
+                    </MudText>
+                    <MudNumericField T="int" Label="Tamanho do pool" @bind-Value="Config.TamanhoPoolRanqueado"
+                                     Min="500" Max="20000" Step="500"
+                                     Variant="Variant.Outlined" Disabled="!Config.ModoRanqueado" />
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+
+        @* Salvar e Restaurar *@
+        <MudItem xs="12" md="6">
+            <MudCard Elevation="0" Class="d-flex flex-column align-center justify-center gap-2" Style="min-height:100%">
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           OnClick="SalvarConfiguracoes">
+                    Salvar Configurações
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Warning"
+                           StartIcon="@Icons.Material.Filled.RestartAlt"
+                           Size="Size.Large"
+                           FullWidth="true"
+                           OnClick="RestaurarPadrao">
+                    Restaurar Padrão
+                </MudButton>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private async Task SalvarConfiguracoes()
+    {
+        await ConfigStorage.SalvarAsync();
+        Snackbar.Add("Configurações salvas!", Severity.Success);
+    }
+
+    private async Task RestaurarPadrao()
+    {
+        var padrao = ConfiguracaoFiltros.Padrao();
+        Config.Paridade = padrao.Paridade;
+        Config.Soma = padrao.Soma;
+        Config.Primos = padrao.Primos;
+        Config.Fibonacci = padrao.Fibonacci;
+        Config.Sequencias = padrao.Sequencias;
+        Config.Faixas = padrao.Faixas;
+        Config.Historico = padrao.Historico;
+        Config.RepeticaoUltimo = padrao.RepeticaoUltimo;
+        Config.NumerosAltos = padrao.NumerosAltos;
+        Config.ModoInteligente = padrao.ModoInteligente;
+        Config.ModoRanqueado = padrao.ModoRanqueado;
+        Config.TamanhoPoolRanqueado = padrao.TamanhoPoolRanqueado;
+
+        await ConfigStorage.SalvarAsync();
+        Snackbar.Add("Configurações restauradas e salvas", Severity.Success);
+    }
+}

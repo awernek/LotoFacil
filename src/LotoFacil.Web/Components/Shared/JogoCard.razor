@@ -1,0 +1,62 @@
+@using LotoFacil.Domain.Models
+
+<MudCard Elevation="2" Class="jogo-card">
+    <MudCardContent>
+        <div class="d-flex justify-space-between align-center mb-2">
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary">Jogo @Indice</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">
+                Soma: @Jogo.Soma
+            </MudChip>
+        </div>
+
+        <div class="numeros-grid">
+            @foreach (var numero in Jogo.Numeros)
+            {
+                <MudAvatar Size="Size.Medium" Class="@GetCorFaixa(numero)" Variant="Variant.Filled">
+                    @numero.ToString("D2")
+                </MudAvatar>
+            }
+        </div>
+
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">
+                P: @Jogo.Pares / I: @Jogo.Impares
+            </MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">
+                Primos: @ContarPrimos()
+            </MudChip>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default">
+                Seq: @ContarSequencias()
+            </MudChip>
+        </div>
+    </MudCardContent>
+</MudCard>
+
+@code {
+    [Parameter, EditorRequired] public Jogo Jogo { get; set; } = default!;
+    [Parameter] public int Indice { get; set; }
+
+    private static readonly HashSet<int> Primos = [2, 3, 5, 7, 11, 13, 17, 19, 23];
+
+    private int ContarPrimos() => Jogo.Numeros.Count(n => Primos.Contains(n));
+
+    private int ContarSequencias()
+    {
+        int seq = 0;
+        for (int i = 0; i < Jogo.Numeros.Count - 1; i++)
+        {
+            if (Jogo.Numeros[i] + 1 == Jogo.Numeros[i + 1])
+                seq++;
+        }
+        return seq;
+    }
+
+    private static string GetCorFaixa(int numero) => numero switch
+    {
+        <= 5 => "faixa-1",
+        <= 10 => "faixa-2",
+        <= 15 => "faixa-3",
+        <= 20 => "faixa-4",
+        _ => "faixa-5"
+    };
+}
